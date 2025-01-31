@@ -14,7 +14,8 @@ from dotenv import load_dotenv
 from PyPDF2 import PdfReader
 
 # Custom or specialized libraries
-from langchain_openai import ChatOpenAI
+# from langchain_openai import ChatOpenAI
+from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 from openai import OpenAI
 
@@ -23,9 +24,9 @@ load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 # Initialize OpenAI clients
-client = OpenAI(api_key=OPENAI_API_KEY)
-llm = ChatOpenAI(api_key=OPENAI_API_KEY, model="gpt-4o-mini", streaming=True)
-
+# client = OpenAI(api_key=OPENAI_API_KEY)
+# llm = ChatOpenAI(api_key=OPENAI_API_KEY, model="gpt-4o-mini", streaming=True)
+llm = ChatOllama(model="llama3.1:latest")
 class AudioQueue:
     """
     A queue-based audio player that manages playback of audio chunks.
@@ -264,15 +265,16 @@ async def main():
     cv_text = PDFProcessor.extract_text_from_pdf(pdf_file_path)
 
     # First, speak the introduction message and wait for it to complete
-    await interviewer.tts_speak(
-        "Hello dear candidate, I am Alloy, your virtual voice assistant for this AI role interview. "
-        "Please introduce yourself briefly. If you stop talking for more than 5 seconds, "
-        "I will assume you have finished your introduction.", 
-        wait=True
-    )
+    # await interviewer.tts_speak(
+    #     "Hello dear candidate, I am Alloy, your virtual voice assistant for this AI role interview. "
+    #     "Please introduce yourself briefly. If you stop talking for more than 5 seconds, "
+    #     "I will assume you have finished your introduction.", 
+    #     wait=True
+    # )
 
     # Collect user's introduction
-    user_response = collect_user_speech()
+    # user_response = collect_user_speech()
+    user_response = "I am Nazim Bendib, a software engineer with a strong background in machine learning and AI. I have experience working on various projects, including natural language processing and computer vision tasks. I am excited to discuss my AI experience with you today."
 
     # If no response, handle gracefully
     if not user_response:
