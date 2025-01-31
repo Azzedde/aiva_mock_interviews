@@ -14,24 +14,21 @@ from dotenv import load_dotenv
 from PyPDF2 import PdfReader
 
 # Custom or specialized libraries
-# Replace with your correct imports if they differ
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
-from openai import OpenAI  # If this is your custom OpenAI wrapper
+from openai import OpenAI
 
 # Load environment variables
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
-# Initialize OpenAI clients (adapt if using standard `openai` library)
+# Initialize OpenAI clients
 client = OpenAI(api_key=OPENAI_API_KEY)
 llm = ChatOpenAI(api_key=OPENAI_API_KEY, model="gpt-4o-mini", streaming=True)
 
 class AudioQueue:
     """
-    A simple queue-based audio player that plays audio chunks in sequence.
-    Once you add audio data (numpy array), it will start playing it 
-    immediately (or once the current chunk is finished).
+    A queue-based audio player that manages playback of audio chunks.
     """
     def __init__(self):
         self.queue = queue.Queue()
@@ -50,6 +47,9 @@ class AudioQueue:
             self._start_playing()
 
     def _audio_callback(self, outdata, frames, time, status):
+        """
+        Callback for audio stream to manage playback.
+        """
         if self.current_audio is None or self.current_position >= len(self.current_audio):
             try:
                 self.current_audio, self.sample_rate = self.queue.get_nowait()
@@ -60,17 +60,18 @@ class AudioQueue:
 
         end_position = self.current_position + frames
         if end_position > len(self.current_audio):
-            # Only partial data available
             available = len(self.current_audio) - self.current_position
             outdata[:available, 0] = self.current_audio[self.current_position:self.current_position + available]
             outdata[available:, 0] = 0
             self.current_position = len(self.current_audio)
         else:
-            # Fill the entire buffer
             outdata[:, 0] = self.current_audio[self.current_position:end_position]
             self.current_position = end_position
 
     def _start_playing(self):
+        """
+        Start the audio playback thread.
+        """
         self.is_playing = True
         self.current_position = 0
 
@@ -85,14 +86,21 @@ class AudioQueue:
         self._play_thread = threading.Thread(target=audio_player)
         self._play_thread.start()
 
+    def wait_for_playback(self, timeout=None):
+        """
+        Wait for the audio playback to complete.
+        """
+        if self._play_thread:
+            self._play_thread.join(timeout=timeout)
+
 class PDFProcessor:
     """
-    A utility class to extract and clean text from PDF files.
+    Utility class for PDF text extraction and processing.
     """
     @staticmethod
     def clean_text(text: str) -> str:
         """
-        Cleans text by handling whitespace, punctuation spacing, bullet points, etc.
+        Clean and format text from PDF.
         """
         text = re.sub(r'\s+', ' ', text)
         text = re.sub(r'\.(?=[A-Z])', '. ', text)
@@ -104,23 +112,9 @@ class PDFProcessor:
         return text.strip()
 
     @staticmethod
-    def detect_section_boundaries(text: str) -> str:
-        """
-        Detects and inserts extra spacing for typical CV sections 
-        like EDUCATION, EXPERIENCE, SKILLS, etc.
-        """
-        section_patterns = [
-            r'(EDUCATION|EXPERIENCE|SKILLS|PROJECTS|CERTIFICATIONS|LANGUAGES)',
-            r'^\s*[A-Z\s]{4,}(?=:|\n)',
-        ]
-        for pattern in section_patterns:
-            text = re.sub(f'({pattern})', r'\n\n\1\n', text, flags=re.MULTILINE)
-        return text
-
-    @staticmethod
     def extract_text_from_pdf(pdf_path: str) -> str:
         """
-        Extracts text from a PDF file, cleans it, and returns the processed text.
+        Extract and clean text from a PDF file.
         """
         try:
             reader = PdfReader(pdf_path)
@@ -133,9 +127,7 @@ class PDFProcessor:
                     text_parts.append(cleaned_text)
 
             full_text = '\n\n'.join(text_parts)
-            full_text = PDFProcessor.detect_section_boundaries(full_text)
-            full_text = PDFProcessor.clean_text(full_text)
-            return full_text
+            return PDFProcessor.clean_text(full_text)
 
         except Exception as e:
             print(f"Error reading PDF: {e}")
@@ -143,36 +135,35 @@ class PDFProcessor:
 
 class AIInterviewer:
     """
-    The AIInterviewer uses a language model to generate interview questions,
-    then speaks them aloud using TTS, and manages an audio queue.
+    AI-powered interview assistant with text-to-speech capabilities.
     """
     def __init__(self):
         self.audio_queue = AudioQueue()
         self.prompt_template = ChatPromptTemplate.from_template("""
-            You are a professional talent acquisition specialist. You are interviewing a candidate for a role related to AI in your company.
-            The candidate has just introduced themselves. Now, you need to ask them a question to understand their experience in AI.
-            Ask the candidate a question related to their experience in AI. The question should be related to their CV that you will be provided
-            and the presentation they gave. The question should be open-ended and should allow the candidate to explain their experience in AI.
+            You are a professional talent acquisition specialist interviewing a candidate for an AI role.
+            The candidate has introduced themselves. Ask an insightful, open-ended question about their AI experience
+            based on their CV and introduction.
 
-            Candidate presentation: {user_response}
+            Candidate Introduction: {user_response}
             CV: {cv}
-            Question:
+            
+            Ask a probing question that reveals the candidate's depth of AI knowledge and experience.
         """)
 
-    async def tts_sentence_chunk(self, sentence: str, voice: str = "alloy"):
+    async def tts_speak(self, text: str, voice: str = "alloy", wait: bool = False):
         """
-        Convert a sentence to speech (via OpenAI TTS) and queue it for playback.
+        Convert text to speech with optional waiting for playback to complete.
         """
-        if not sentence.strip():
+        if not text.strip():
             return
 
         try:
-            # Get audio response from your TTS-enabled OpenAI client
+            # Get audio response from OpenAI TTS
             response = await asyncio.to_thread(
                 client.audio.speech.create,
                 model="tts-1",
                 voice=voice,
-                input=sentence.strip()
+                input=text.strip()
             )
 
             # Read the TTS result as bytes
@@ -180,48 +171,27 @@ class AIInterviewer:
 
             # Convert MP3 to a NumPy array using pydub
             audio_segment = AudioSegment.from_mp3(audio_bytes)
-            audio_array = np.array(audio_segment.get_array_of_samples(), dtype=np.float32) / 32768.0  # Normalize [-1, 1]
+            audio_array = np.array(audio_segment.get_array_of_samples(), dtype=np.float32) / 32768.0
 
             # Convert stereo to mono if necessary
             if audio_segment.channels == 2:
                 audio_array = audio_array.reshape((-1, 2)).mean(axis=1)
 
-            # Add to the audio queue for playback
+            # Add to the audio queue
             self.audio_queue.add_audio(audio_array, audio_segment.frame_rate)
+
+            # Optionally wait for playback to complete
+            if wait:
+                self.audio_queue.wait_for_playback()
 
         except Exception as e:
             print(f"[TTS Error] {e}")
 
-    async def process_stream_chunk(self, chunk: str, buffer_text: str) -> str:
+    async def stream_interview_question(self, user_response: str, cv_text: str):
         """
-        Processes a chunk of streamed LLM text. Whenever it encounters a sentence boundary,
-        it sends that sentence to TTS for immediate playback.
-        """
-        sentence_end_pattern = re.compile(r"[.?!]\s")
-        buffer_text += chunk
-
-        while True:
-            match = sentence_end_pattern.search(buffer_text)
-            if not match:
-                break
-
-            boundary_index = match.end()
-            sentence = buffer_text[:boundary_index]
-            buffer_text = buffer_text[boundary_index:]
-
-            await self.tts_sentence_chunk(sentence)
-
-        return buffer_text
-
-    async def stream_llm_with_sentence_tts(self, user_response: str, cv_text: str):
-        """
-        Creates a prompt using the user's response and CV text, streams 
-        the language model's output chunk by chunk, and plays TTS for 
-        each sentence in real-time.
+        Generate and stream an interview question based on the user's introduction.
         """
         print("AI Interviewer: ", end="", flush=True)
-
-        buffer_text = ""
 
         # Create the prompt
         prompt = self.prompt_template.invoke({
@@ -229,52 +199,61 @@ class AIInterviewer:
             "cv": cv_text
         })
 
+        # Collect the full response for TTS
+        full_response = ""
+        
         # Stream the LLM response
         stream = await asyncio.to_thread(llm.stream, prompt)
 
         # Process each chunk in the stream
         for chunk in stream:
-            # LangChain's ChatMessageChunk typically has a `.content` attribute
             if hasattr(chunk, 'content'):
                 text_chunk = chunk.content
             else:
                 text_chunk = str(chunk)
 
+            full_response += text_chunk
             print(text_chunk, end="", flush=True)
-            buffer_text = await self.process_stream_chunk(text_chunk, buffer_text)
 
-        # Process any leftover text in the buffer
-        if buffer_text.strip():
-            await self.tts_sentence_chunk(buffer_text.strip())
+        print("\n--- End of AI Interviewer Question ---")
+        
+        # Speak the generated question
+        await self.tts_speak(full_response, wait=True)
+        
+        return full_response
 
-        print("\n--- End of AI Interviewer Response ---")
-
-# Function to collect user's speech
-def collect_user_speech():
+def collect_user_speech(timeout: int = 10, phrase_timeout: int = 5):
+    """
+    Collect user's speech with more robust error handling.
+    
+    Args:
+        timeout (int): Total time to listen for speech
+        phrase_timeout (int): Maximum silence between phrases
+    
+    Returns:
+        str: Recognized speech text
+    """
     recognizer = sr.Recognizer()
-    mic = sr.Microphone()
-
-    with mic as source:
+    
+    with sr.Microphone() as source:
         print("Adjusting for ambient noise... Please wait.")
-        recognizer.adjust_for_ambient_noise(source)
+        recognizer.adjust_for_ambient_noise(source, duration=1)
         print("Listening... Speak now!")
 
-        speech_text = []
-        while True:
-            try:
-                audio = recognizer.listen(source, timeout=5, phrase_time_limit=5)  # Stop if silent for 5 sec
-                text = recognizer.recognize_google(audio)  # Convert speech to text
-                print(f"Recognized: {text}")
-                speech_text.append(text)
-            except sr.WaitTimeoutError:
-                print("No speech detected for 5 seconds. Stopping recording.")
-                break
-            except sr.UnknownValueError:
-                print("Could not understand the audio.")
-            except sr.RequestError:
-                print("API request error.")
-    
-    return " ".join(speech_text) 
+        try:
+            audio = recognizer.listen(source, timeout=timeout, phrase_time_limit=phrase_timeout)
+            text = recognizer.recognize_google(audio)
+            print(f"Recognized: {text}")
+            return text
+        except sr.WaitTimeoutError:
+            print("No speech detected within the time limit.")
+            return ""
+        except sr.UnknownValueError:
+            print("Could not understand the audio.")
+            return ""
+        except sr.RequestError as e:
+            print(f"Speech recognition service error: {e}")
+            return ""
 
 async def main():
     # Initialize the AI Interviewer
@@ -284,17 +263,24 @@ async def main():
     pdf_file_path = "Nazim_Bendib_CV_one_page_(all).pdf"  # Adjust to your CV path
     cv_text = PDFProcessor.extract_text_from_pdf(pdf_file_path)
 
-    # tell the user to introduce themselves with the voice assistant
-    await interviewer.tts_sentence_chunk("Hello dear candidate, I am Alloy, your virtual voice assistant that will help you through this mock interview for a role in Artificial Intelligence. Please start by introducing yourself briefly. Don't forget that if you stop talking for 5 minutes I will assume that you finished talking.", voice="alloy")
-    print("-- First Message Sent --")
-    # wait for the previous code to finish in order to start the next one
+    # First, speak the introduction message and wait for it to complete
+    await interviewer.tts_speak(
+        "Hello dear candidate, I am Alloy, your virtual voice assistant for this AI role interview. "
+        "Please introduce yourself briefly. If you stop talking for more than 5 seconds, "
+        "I will assume you have finished your introduction.", 
+        wait=True
+    )
+
+    # Collect user's introduction
     user_response = collect_user_speech()
 
-    print("-- User Introduction Finished--")
-    # Run the interview
-    await interviewer.stream_llm_with_sentence_tts(user_response, cv_text)
+    # If no response, handle gracefully
+    if not user_response:
+        await interviewer.tts_speak("I'm sorry, but I couldn't hear your introduction. Could you please speak up?")
+        return
 
-    print("Interview completed. Thank you for participating!")
+    # Generate and ask an interview question
+    await interviewer.stream_interview_question(user_response, cv_text)
 
 if __name__ == "__main__":
     asyncio.run(main())
