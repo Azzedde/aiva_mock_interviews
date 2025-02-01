@@ -1,3 +1,6 @@
 .env
 static
 .mypy_cache
+/v
+/tts-api/api-env
+/tts-api/__pycache__
