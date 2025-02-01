@@ -8,25 +8,15 @@ import numpy as np
 import sounddevice as sd
 import speech_recognition as sr
 from pydub import AudioSegment
-from pathlib import Path
-from scipy.io import wavfile
-from dotenv import load_dotenv
 from PyPDF2 import PdfReader
+from API_handler import handler
 
 # Custom or specialized libraries
-# from langchain_openai import ChatOpenAI
 from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
-from openai import OpenAI
 
-# Load environment variables
-load_dotenv()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
-# Initialize OpenAI clients
-# client = OpenAI(api_key=OPENAI_API_KEY)
-# llm = ChatOpenAI(api_key=OPENAI_API_KEY, model="gpt-4o-mini", streaming=True)
 llm = ChatOllama(model="llama3.1:latest")
+
 class AudioQueue:
     """
     A queue-based audio player that manages playback of audio chunks.
@@ -151,7 +141,7 @@ class AIInterviewer:
             Ask a probing question that reveals the candidate's depth of AI knowledge and experience.
         """)
 
-    async def tts_speak(self, text: str, voice: str = "alloy", wait: bool = False):
+    async def tts_speak(self, text: str, wait: bool = False):
         """
         Convert text to speech with optional waiting for playback to complete.
         """
@@ -159,11 +149,8 @@ class AIInterviewer:
             return
 
         try:
-            # Get audio response from OpenAI TTS
             response = await asyncio.to_thread(
-                client.audio.speech.create,
-                model="tts-1",
-                voice=voice,
+                handler,
                 input=text.strip()
             )
 
@@ -261,19 +248,19 @@ async def main():
     interviewer = AIInterviewer()
 
     # Load and process the CV
-    pdf_file_path = "Nazim_Bendib_CV_one_page_(all).pdf"  # Adjust to your CV path
+    pdf_file_path = "./CV/Nazim_Bendib_CV_one_page_(all).pdf"  # Adjust to your CV path
     cv_text = PDFProcessor.extract_text_from_pdf(pdf_file_path)
 
     # First, speak the introduction message and wait for it to complete
-    # await interviewer.tts_speak(
-    #     "Hello dear candidate, I am Alloy, your virtual voice assistant for this AI role interview. "
-    #     "Please introduce yourself briefly. If you stop talking for more than 5 seconds, "
-    #     "I will assume you have finished your introduction.", 
-    #     wait=True
-    # )
+    await interviewer.tts_speak(
+        "Hello dear candidate, I am Alloy, your virtual voice assistant for this AI role interview. "
+        "Please introduce yourself briefly. If you stop talking for more than 5 seconds, "
+        "I will assume you have finished your introduction.",
+        wait=True
+    )
 
     # Collect user's introduction
-    # user_response = collect_user_speech()
+    user_response = collect_user_speech()
     user_response = "I am Nazim Bendib, a software engineer with a strong background in machine learning and AI. I have experience working on various projects, including natural language processing and computer vision tasks. I am excited to discuss my AI experience with you today."
 
     # If no response, handle gracefully
