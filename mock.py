@@ -1,135 +1,28 @@
-import os
-import re
 import io
-import queue
 import threading
 import asyncio
 import numpy as np
 import sounddevice as sd
 import speech_recognition as sr
 from pydub import AudioSegment
-from PyPDF2 import PdfReader
-from API_handler import handler
+import requests
+import pyaudio
+import numpy as np
+from utils import PDFProcessor
 
 # Custom or specialized libraries
 from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 
+URL = "http://localhost:8000/stream-audio?text="
+
 llm = ChatOllama(model="llama3.1:latest")
-
-class AudioQueue:
-    """
-    A queue-based audio player that manages playback of audio chunks.
-    """
-    def __init__(self):
-        self.queue = queue.Queue()
-        self.current_audio = None
-        self.is_playing = False
-        self._play_thread = None
-        self.current_position = 0
-        self.sample_rate = 22050
-
-    def add_audio(self, audio_data: np.ndarray, sample_rate: int):
-        """
-        Add an audio numpy array and its sample rate to the playback queue.
-        """
-        self.queue.put((audio_data, sample_rate))
-        if not self.is_playing:
-            self._start_playing()
-
-    def _audio_callback(self, outdata, frames, time, status):
-        """
-        Callback for audio stream to manage playback.
-        """
-        if self.current_audio is None or self.current_position >= len(self.current_audio):
-            try:
-                self.current_audio, self.sample_rate = self.queue.get_nowait()
-                self.current_position = 0
-            except queue.Empty:
-                self.is_playing = False
-                raise sd.CallbackAbort
-
-        end_position = self.current_position + frames
-        if end_position > len(self.current_audio):
-            available = len(self.current_audio) - self.current_position
-            outdata[:available, 0] = self.current_audio[self.current_position:self.current_position + available]
-            outdata[available:, 0] = 0
-            self.current_position = len(self.current_audio)
-        else:
-            outdata[:, 0] = self.current_audio[self.current_position:end_position]
-            self.current_position = end_position
-
-    def _start_playing(self):
-        """
-        Start the audio playback thread.
-        """
-        self.is_playing = True
-        self.current_position = 0
-
-        def audio_player():
-            try:
-                with sd.OutputStream(channels=1, callback=self._audio_callback, samplerate=self.sample_rate):
-                    while self.is_playing:
-                        sd.sleep(100)
-            except Exception as e:
-                print(f"Audio playback error: {e}")
-
-        self._play_thread = threading.Thread(target=audio_player)
-        self._play_thread.start()
-
-    def wait_for_playback(self, timeout=None):
-        """
-        Wait for the audio playback to complete.
-        """
-        if self._play_thread:
-            self._play_thread.join(timeout=timeout)
-
-class PDFProcessor:
-    """
-    Utility class for PDF text extraction and processing.
-    """
-    @staticmethod
-    def clean_text(text: str) -> str:
-        """
-        Clean and format text from PDF.
-        """
-        text = re.sub(r'\s+', ' ', text)
-        text = re.sub(r'\.(?=[A-Z])', '. ', text)
-        text = re.sub(r',(?=[^\s])', ', ', text)
-        text = re.sub(r'(?<=[.!?])\s{2,}', '\n\n', text)
-        text = text.replace('•', '\n• ')
-        text = re.sub(r'([a-z])([A-Z])', r'\1\n\2', text)
-        text = re.sub(r'\n{3,}', '\n\n', text)
-        return text.strip()
-
-    @staticmethod
-    def extract_text_from_pdf(pdf_path: str) -> str:
-        """
-        Extract and clean text from a PDF file.
-        """
-        try:
-            reader = PdfReader(pdf_path)
-            text_parts = []
-
-            for page in reader.pages:
-                page_text = page.extract_text() or ""
-                if page_text:
-                    cleaned_text = PDFProcessor.clean_text(page_text)
-                    text_parts.append(cleaned_text)
-
-            full_text = '\n\n'.join(text_parts)
-            return PDFProcessor.clean_text(full_text)
-
-        except Exception as e:
-            print(f"Error reading PDF: {e}")
-            return ""
 
 class AIInterviewer:
     """
     AI-powered interview assistant with text-to-speech capabilities.
     """
     def __init__(self):
-        self.audio_queue = AudioQueue()
         self.prompt_template = ChatPromptTemplate.from_template("""
             You are a professional talent acquisition specialist interviewing a candidate for an AI role.
             The candidate has introduced themselves. Ask an insightful, open-ended question about their AI experience
@@ -147,31 +40,39 @@ class AIInterviewer:
         """
         if not text.strip():
             return
-
         try:
-            response = await asyncio.to_thread(
-                handler,
-                input=text.strip()
-            )
+            # Make a streaming request to the FastAPI server
+            with requests.get(URL + text.strip(), stream=True) as response:
+                if response.status_code != 200:
+                    print("Error: Unable to retrieve audio.")
+                    return
+                
+                # Read and process the audio in chunks
+                for chunk in response.iter_content(chunk_size=1024):
+                    if chunk:  # ignore empty chunks
+                        audio_bytes = io.BytesIO(chunk)
 
-            # Read the TTS result as bytes
-            audio_bytes = io.BytesIO(await asyncio.to_thread(response.read))
+                        try:
+                            # Load audio from WAV format
+                            audio_segment = AudioSegment.from_wav(audio_bytes)
+                            print(f"Audio loaded successfully, format: {audio_segment.format}")
 
-            # Convert MP3 to a NumPy array using pydub
-            audio_segment = AudioSegment.from_mp3(audio_bytes)
-            audio_array = np.array(audio_segment.get_array_of_samples(), dtype=np.float32) / 32768.0
+                            # Convert audio to numpy array and normalize
+                            audio_array = np.array(audio_segment.get_array_of_samples(), dtype=np.float32) / 32768.0
 
-            # Convert stereo to mono if necessary
-            if audio_segment.channels == 2:
-                audio_array = audio_array.reshape((-1, 2)).mean(axis=1)
+                            # Convert stereo to mono if necessary
+                            if audio_segment.channels == 2:
+                                audio_array = audio_array.reshape((-1, 2)).mean(axis=1)
 
-            # Add to the audio queue
-            self.audio_queue.add_audio(audio_array, audio_segment.frame_rate)
+                            # Add the audio to the queue for playback
+                            self.audio_queue.add_audio(audio_array, audio_segment.frame_rate)
 
-            # Optionally wait for playback to complete
-            if wait:
-                self.audio_queue.wait_for_playback()
+                            # Optionally wait for playback to complete
+                            self.audio_queue.wait_for_playback()
 
+                        except Exception as e:
+                            print(f"Error loading audio chunk: {e}")
+                            continue  # Skip this chunk and try the next one
         except Exception as e:
             print(f"[TTS Error] {e}")
 
@@ -260,16 +161,16 @@ async def main():
     )
 
     # Collect user's introduction
-    user_response = collect_user_speech()
+    ''''user_response = collect_user_speech()
     user_response = "I am Nazim Bendib, a software engineer with a strong background in machine learning and AI. I have experience working on various projects, including natural language processing and computer vision tasks. I am excited to discuss my AI experience with you today."
 
     # If no response, handle gracefully
     if not user_response:
         await interviewer.tts_speak("I'm sorry, but I couldn't hear your introduction. Could you please speak up?")
-        return
+        return'''
 
     # Generate and ask an interview question
-    await interviewer.stream_interview_question(user_response, cv_text)
+    #await interviewer.stream_interview_question(user_response, cv_text)
 
 if __name__ == "__main__":
     asyncio.run(main())
