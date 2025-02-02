@@ -137,7 +137,7 @@ async def main():
     )
 
     # Collect user's introduction
-    ''''user_response = collect_user_speech()
+    '''user_response = collect_user_speech()
     user_response = "I am Nazim Bendib, a software engineer with a strong background in machine learning and AI. I have experience working on various projects, including natural language processing and computer vision tasks. I am excited to discuss my AI experience with you today."
 
     # If no response, handle gracefully
