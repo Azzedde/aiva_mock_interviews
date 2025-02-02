@@ -2,6 +2,7 @@ import asyncio
 import speech_recognition as sr
 import requests
 import pyaudio
+import aiohttp
 from utils import PDFProcessor
 
 # Custom or specialized libraries
@@ -30,7 +31,18 @@ class AIInterviewer:
             Ask a probing question that reveals the candidate's depth of AI knowledge and experience.
         """)
 
-    async def tts_speak(self, text: str, wait: bool = False):
+    async def stream_response(self, text : str):
+        async with aiohttp.ClientSession() as session:
+            async with session.get(URL + text.strip()) as response:
+                if response.status != 200:
+                    print("Error: Unable to retrieve audio.")
+                    return
+                # Read and process the audio in chunks
+                async for chunk in response.content.iter_any():
+                    if chunk:  # Ignore empty chunks
+                        self.stream.write(chunk)  # Write the chunk to PyAudio for immediate playback
+
+    async def tts_speak(self, text: str):
         """
         Convert text to speech with optional waiting for playback to complete.
         """
@@ -38,17 +50,18 @@ class AIInterviewer:
             return
         try:
             # Make a streaming request to the FastAPI server
-            with requests.get(URL + text.strip(), stream=True) as response:
-                if response.status_code != 200:
-                    print("Error: Unable to retrieve audio.")
-                    return
-                
-                # Read and process the audio in chunks
-                for chunk in response.iter_content(chunk_size=1024):
-                    if chunk:  # ignore empty chunks
-                        self.stream.write(chunk) 
+            await self.stream_response(text)
         except Exception as e:
             print(f"[TTS Error] {e}")
+
+    def llm_stream(self, prompt):
+        with llm.stream(prompt) as stream:
+            for chunk in stream:
+                if hasattr(chunk, 'content'):
+                    text_chunk = chunk.content
+                else:
+                    text_chunk = str(chunk)
+                yield text_chunk
 
     async def stream_interview_question(self, user_response: str, cv_text: str):
         """
@@ -62,28 +75,18 @@ class AIInterviewer:
             "cv": cv_text
         })
 
-        # Collect the full response for TTS
         full_response = ""
-        
+
         # Stream the LLM response
-        stream = await asyncio.to_thread(llm.stream, prompt)
-
-        # Process each chunk in the stream
-        for chunk in stream:
-            if hasattr(chunk, 'content'):
-                text_chunk = chunk.content
-            else:
-                text_chunk = str(chunk)
-
-            full_response += text_chunk
-            print(text_chunk, end="", flush=True)
-
-        print("\n--- End of AI Interviewer Question ---")
-        
-        # Speak the generated question
-        await self.tts_speak(full_response, wait=True)
+        stream = await asyncio.to_thread(self.llm_stream, prompt)
+         # Process each chunk in the stream
+        async for chunk in stream:
+            full_response += chunk  # Accumulate the response
+            # Stream the chunk to the TTS component for immediate playback
+            await self.tts_speak(chunk)
         
         return full_response
+       
 
 def collect_user_speech(timeout: int = 10, phrase_timeout: int = 5):
     """
@@ -130,8 +133,7 @@ async def main():
     await interviewer.tts_speak(
         "Hello dear candidate, I am Alloy, your virtual voice assistant for this AI role interview. "
         "Please introduce yourself briefly. If you stop talking for more than 5 seconds, "
-        "I will assume you have finished your introduction.",
-        wait=True
+        "I will assume you have finished your introduction."
     )
 
     # Collect user's introduction
