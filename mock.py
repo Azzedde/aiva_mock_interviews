@@ -1,13 +1,7 @@
-import io
-import threading
 import asyncio
-import numpy as np
-import sounddevice as sd
 import speech_recognition as sr
-from pydub import AudioSegment
 import requests
 import pyaudio
-import numpy as np
 from utils import PDFProcessor
 
 # Custom or specialized libraries
@@ -15,6 +9,7 @@ from langchain_ollama import ChatOllama
 from langchain_core.prompts import ChatPromptTemplate
 
 URL = "http://localhost:8000/stream-audio?text="
+P = pyaudio.PyAudio()
 
 llm = ChatOllama(model="llama3.1:latest")
 
@@ -23,6 +18,7 @@ class AIInterviewer:
     AI-powered interview assistant with text-to-speech capabilities.
     """
     def __init__(self):
+        self.stream = P.open(format=pyaudio.paInt16, channels=1, rate=22050, output=True)
         self.prompt_template = ChatPromptTemplate.from_template("""
             You are a professional talent acquisition specialist interviewing a candidate for an AI role.
             The candidate has introduced themselves. Ask an insightful, open-ended question about their AI experience
@@ -50,29 +46,7 @@ class AIInterviewer:
                 # Read and process the audio in chunks
                 for chunk in response.iter_content(chunk_size=1024):
                     if chunk:  # ignore empty chunks
-                        audio_bytes = io.BytesIO(chunk)
-
-                        try:
-                            # Load audio from WAV format
-                            audio_segment = AudioSegment.from_wav(audio_bytes)
-                            print(f"Audio loaded successfully, format: {audio_segment.format}")
-
-                            # Convert audio to numpy array and normalize
-                            audio_array = np.array(audio_segment.get_array_of_samples(), dtype=np.float32) / 32768.0
-
-                            # Convert stereo to mono if necessary
-                            if audio_segment.channels == 2:
-                                audio_array = audio_array.reshape((-1, 2)).mean(axis=1)
-
-                            # Add the audio to the queue for playback
-                            self.audio_queue.add_audio(audio_array, audio_segment.frame_rate)
-
-                            # Optionally wait for playback to complete
-                            self.audio_queue.wait_for_playback()
-
-                        except Exception as e:
-                            print(f"Error loading audio chunk: {e}")
-                            continue  # Skip this chunk and try the next one
+                        self.stream.write(chunk) 
         except Exception as e:
             print(f"[TTS Error] {e}")
 

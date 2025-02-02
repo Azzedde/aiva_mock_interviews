@@ -18,7 +18,13 @@ def generate_audio_stream(text: str):
         buffer = BytesIO()
         sf.write(buffer, audio, 22050, format='WAV')
         buffer.seek(0)
-        yield buffer.read()
+        chunk_size = 1024  # Send small chunks
+        while True:
+            chunk = buffer.read(chunk_size)
+            if not chunk:
+                break
+            yield chunk
+
 
 @app.get("/stream-audio/")
 def stream_audio(text: str):
