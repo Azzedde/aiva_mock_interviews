@@ -1,9 +1,7 @@
 import asyncio
-import speech_recognition as sr
-import requests
 import pyaudio
 import aiohttp
-from utils import PDFProcessor
+import utils
 
 # Custom or specialized libraries
 from langchain_ollama import ChatOllama
@@ -54,9 +52,9 @@ class AIInterviewer:
         except Exception as e:
             print(f"[TTS Error] {e}")
 
-    def llm_stream(self, prompt):
-        with llm.stream(prompt) as stream:
-            for chunk in stream:
+    async def llm_stream(self, prompt):
+        async with llm.stream(prompt) as stream:
+            async for chunk in stream:
                 if hasattr(chunk, 'content'):
                     text_chunk = chunk.content
                 else:
@@ -74,52 +72,12 @@ class AIInterviewer:
             "user_response": user_response,
             "cv": cv_text
         })
-
-        full_response = ""
-
         # Stream the LLM response
         stream = await asyncio.to_thread(self.llm_stream, prompt)
          # Process each chunk in the stream
         async for chunk in stream:
-            full_response += chunk  # Accumulate the response
             # Stream the chunk to the TTS component for immediate playback
             await self.tts_speak(chunk)
-        
-        return full_response
-       
-
-def collect_user_speech(timeout: int = 10, phrase_timeout: int = 5):
-    """
-    Collect user's speech with more robust error handling.
-    
-    Args:
-        timeout (int): Total time to listen for speech
-        phrase_timeout (int): Maximum silence between phrases
-    
-    Returns:
-        str: Recognized speech text
-    """
-    recognizer = sr.Recognizer()
-    
-    with sr.Microphone() as source:
-        print("Adjusting for ambient noise... Please wait.")
-        recognizer.adjust_for_ambient_noise(source, duration=1)
-        print("Listening... Speak now!")
-
-        try:
-            audio = recognizer.listen(source, timeout=timeout, phrase_time_limit=phrase_timeout)
-            text = recognizer.recognize_google(audio)
-            print(f"Recognized: {text}")
-            return text
-        except sr.WaitTimeoutError:
-            print("No speech detected within the time limit.")
-            return ""
-        except sr.UnknownValueError:
-            print("Could not understand the audio.")
-            return ""
-        except sr.RequestError as e:
-            print(f"Speech recognition service error: {e}")
-            return ""
 
 async def main():
     # Initialize the AI Interviewer
@@ -127,15 +85,16 @@ async def main():
 
     # Load and process the CV
     pdf_file_path = "./CV/Nazim_Bendib_CV_one_page_(all).pdf"  # Adjust to your CV path
-    cv_text = PDFProcessor.extract_text_from_pdf(pdf_file_path)
+    cv_text = utils.extract_text_from_pdf(pdf_file_path)
 
     # First, speak the introduction message and wait for it to complete
+    '''
     await interviewer.tts_speak(
         "Hello dear candidate, I am Alloy, your virtual voice assistant for this AI role interview. "
         "Please introduce yourself briefly. If you stop talking for more than 5 seconds, "
         "I will assume you have finished your introduction."
     )
-
+    '''
     # Collect user's introduction
     '''user_response = collect_user_speech()
     user_response = "I am Nazim Bendib, a software engineer with a strong background in machine learning and AI. I have experience working on various projects, including natural language processing and computer vision tasks. I am excited to discuss my AI experience with you today."
@@ -146,7 +105,7 @@ async def main():
         return'''
 
     # Generate and ask an interview question
-    #await interviewer.stream_interview_question(user_response, cv_text)
+    await interviewer.stream_interview_question("Hi my name is Ahmed", cv_text)
 
 if __name__ == "__main__":
     asyncio.run(main())
