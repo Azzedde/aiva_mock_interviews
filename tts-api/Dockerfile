@@ -14,4 +14,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 EXPOSE 8000
 
 # Run FastAPI server
-CMD ["uvicorn", "fast_tts_api:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["uvicorn", "streaming_api:app", "--host", "0.0.0.0", "--port", "8000"]

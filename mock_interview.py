@@ -52,14 +52,14 @@ class AIInterviewer:
         except Exception as e:
             print(f"[TTS Error] {e}")
 
-    async def llm_stream(self, prompt):
-        async with llm.stream(prompt) as stream:
-            async for chunk in stream:
-                if hasattr(chunk, 'content'):
-                    text_chunk = chunk.content
-                else:
-                    text_chunk = str(chunk)
-                yield text_chunk
+    def llm_stream(self, prompt):
+        stream = llm.stream(prompt)
+        for chunk in stream:
+            if hasattr(chunk, 'content'):
+                text_chunk = chunk.content
+            else:
+                text_chunk = str(chunk)
+            yield text_chunk
 
     async def stream_interview_question(self, user_response: str, cv_text: str):
         """
@@ -73,7 +73,7 @@ class AIInterviewer:
             "cv": cv_text
         })
         # Stream the LLM response
-        stream = await asyncio.to_thread(self.llm_stream, prompt)
+        stream = self.llm_stream(prompt)
          # Process each chunk in the stream
         async for chunk in stream:
             # Stream the chunk to the TTS component for immediate playback
