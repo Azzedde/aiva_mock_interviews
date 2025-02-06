@@ -1,6 +1,7 @@
 from PyPDF2 import PdfReader
 import re
 import speech_recognition as sr
+from io import StringIO
 
 def clean_text(text: str) -> str:
     """
@@ -68,3 +69,9 @@ def collect_user_speech(timeout: int = 10, phrase_timeout: int = 5):
         except sr.RequestError as e:
             print(f"Speech recognition service error: {e}")
             return ""
+
+def chunk_text_fixed_size(text, chunk_size=256):
+    """Splits text into fixed-size chunks using StringIO"""
+    buffer = StringIO(text)
+    while chunk := buffer.read(chunk_size):  # Read `chunk_size` at a time
+        yield chunk  # Yield each chunk immediately
