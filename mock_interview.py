@@ -2,6 +2,7 @@ import asyncio
 import pyaudio
 import aiohttp
 import utils
+from openai import OpenAI
 
 # Custom or specialized libraries
 from langchain_ollama import ChatOllama
