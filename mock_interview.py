@@ -1,6 +1,7 @@
 import asyncio
 from aiinterviewer import AIInterviewer
- 
+import utils
+
 async def main():
     # Initialize the AI Interviewer
     interviewer = AIInterviewer()
@@ -9,12 +10,13 @@ async def main():
     '''pdf_file_path = "./CV/Nazim_Bendib_CV_one_page_(all).pdf"  # Adjust to your CV path
     cv_text = utils.extract_text_from_pdf(pdf_file_path)'''
 
+    intro = """Hello dear candidate, I am Alloy, your virtual voice assistant for this AI role interview.
+    Please introduce yourself briefly. If you stop talking for more than 5 seconds,
+    I will assume you have finished your introduction."""
+
     # First, speak the introduction message and wait for it to complete
-    await interviewer.tts_speak(
-        "Hello dear candidate, I am Alloy, your virtual voice assistant for this AI role interview. "
-        "Please introduce yourself briefly. If you stop talking for more than 5 seconds, "
-        "I will assume you have finished your introduction."
-    )
+    for chunk in utils.chunk_text_fixed_size(intro):
+        await interviewer.tts_speak(chunk)
 
     # Collect user's introduction
     '''user_response = collect_user_speech()
