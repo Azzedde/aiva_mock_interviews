@@ -125,6 +125,7 @@ def init_cv_question_stream(cv, user_intro, client, model):
     Talk directly to the candidate.
     Be kind, nice, helpful, and professional.
     You need to keep it a natural conversation.
+    You need to be human-like, and to interact with the last thing that the candidate said.
     Candidate Introduction: {intro}
     CV: {cv}
 
@@ -177,7 +178,7 @@ def stream_next_cv_question(client, model, cv, chat_history):
     You should not explain the beginning of the conversation or the context of the question.
     Don't repeat previous questions.
     Before asking the question, give a natural transition from the previous answer.
-    Don't explain anythin, and don't give any notes.
+    Don't explain anything, and don't give any notes.
     Talk directly to the candidate.
     Be kind, nice, helpful, and professional.
     You need to keep it a natural conversation.

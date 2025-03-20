@@ -156,6 +156,7 @@ if 'audio_bytes' not in st.session_state:
     st.session_state.audio_bytes = None
 if 'recording' not in st.session_state:
     st.session_state.recording = False
+    st.session_state.user_intro = ""
 if 'client' not in st.session_state:
     st.session_state.client = OpenAI(
         api_key=os.getenv("API_KEY"),
@@ -201,6 +202,7 @@ def reset_interview():
     st.session_state.cv_text = None
     st.session_state.interview_type = None
     st.session_state.audio_bytes = None
+    st.session_state.user_intro = ""
 
 # Main app header
 st.markdown('<div class="interview-header"><h1>🎙️ AI Mock Interview System</h1></div>', unsafe_allow_html=True)
@@ -406,7 +408,6 @@ else:
     if st.session_state.interview_type == "cv":
         # CV-based interview
         st.markdown('<h2>CV-based Interview</h2>', unsafe_allow_html=True)
-        
         # Initialize the interview if it's just starting
         if len(st.session_state.chat_history) == 0:
             # Introduction message
@@ -421,6 +422,9 @@ else:
             audio_bytes, audio_stream = synthesize_and_play(intro)
             if audio_stream:
                 backend.play_audio(audio_stream)
+            # Store audio bytes for playback
+            st.session_state.audio_bytes = audio_bytes
+            
             # Display the introduction message
             st.markdown(f'<div class="interviewer-message"><strong>Interviewer:</strong> {intro}</div>', unsafe_allow_html=True)
             
@@ -438,30 +442,15 @@ else:
             # Record user's introduction if recording is active
             if st.session_state.recording:
                 st.markdown('<div class="candidate-message"><strong>You:</strong> <i>Recording your response...</i></div>', unsafe_allow_html=True)
-                user_intro = record_and_transcribe()
+                st.session_state.user_intro = record_and_transcribe()
                 
                 # Add to chat history
-                st.session_state.chat_history.append({"role": "candidate", "content": user_intro})
+                st.session_state.chat_history.append({"role": "candidate", "content": st.session_state.user_intro})
                 
                 # Reset recording state
                 st.session_state.recording = False
-            
-            # Generate first question
-            first_question = backend.init_cv_question_stream(
-                st.session_state.cv_text,
-                user_intro,
-                st.session_state.client,
-                st.session_state.model
-            )
-            
-            # Add to chat history
-            st.session_state.chat_history.append({"role": "interviewer", "content": first_question})
-            
-            # Synthesize and play the first question
-            audio_bytes = synthesize_and_play(first_question)
-            backend.play_audio(audio_bytes)
-            
-            st.rerun()
+                st.rerun()
+                st.rerun()
         
         elif len(st.session_state.chat_history) < 8:  # Limit to 4 questions (8 messages including responses)
             # Display chat history
@@ -471,8 +460,59 @@ else:
                 else:
                     st.markdown(f'<div class="candidate-message"><strong>You:</strong> {message["content"]}</div>', unsafe_allow_html=True)
             
-            # If the last message was from the interviewer, record the user's response
-            if st.session_state.chat_history[-1]["role"] == "interviewer":
+            # If the last message was from the candidate, generate the next question
+            if st.session_state.chat_history[-1]["role"] == "candidate":
+                # Check if this is the first response (after introduction)
+                if len(st.session_state.chat_history) == 2:
+                    # Generate first question
+                    first_question = backend.init_cv_question_stream(
+                        st.session_state.cv_text,
+                        st.session_state.chat_history[1]["content"],  # User's introduction
+                        st.session_state.client,
+                        st.session_state.model
+                    )
+                    
+                    # Add to chat history
+                    st.session_state.chat_history.append({"role": "interviewer", "content": first_question})
+                    
+                    # Synthesize and play the first question
+                    audio_bytes, audio_stream = synthesize_and_play(first_question)
+                    if audio_stream:
+                        backend.play_audio(audio_stream)
+                    st.session_state.audio_bytes = audio_bytes
+                # If not the first response and we haven't reached the end
+                elif len(st.session_state.chat_history) < 7:  # Less than 4 questions asked
+                    # Generate next question
+                    next_question = backend.stream_next_cv_question(
+                        st.session_state.client,
+                        st.session_state.model,
+                        st.session_state.cv_text,
+                        st.session_state.chat_history
+                    )
+                    
+                    # Add to chat history
+                    st.session_state.chat_history.append({"role": "interviewer", "content": next_question})
+                    
+                    # Synthesize and play the next question
+                    audio_bytes, audio_stream = synthesize_and_play(next_question)
+                    if audio_stream:
+                        backend.play_audio(audio_stream)
+                    st.session_state.audio_bytes = audio_bytes
+                else:
+                    # End the interview
+                    conclusion = "Thank you for participating in this interview. I'll now generate an evaluation report based on our conversation."
+                    st.session_state.chat_history.append({"role": "interviewer", "content": conclusion})
+                    audio_bytes, audio_stream = synthesize_and_play(conclusion)
+                    if audio_stream:
+                        backend.play_audio(audio_stream)
+                    st.session_state.audio_bytes = audio_bytes
+                    st.session_state.interview_completed = True
+                
+                # Always rerun after generating a question to update the UI
+                st.rerun()
+            
+            # If the last message was from the interviewer, wait for user response
+            elif st.session_state.chat_history[-1]["role"] == "interviewer":
                 # Play the last interviewer message
                 if st.session_state.audio_bytes:
                     st.audio(st.session_state.audio_bytes, format="audio/wav")
@@ -494,34 +534,7 @@ else:
                     
                     # Reset recording state
                     st.session_state.recording = False
-                
-                # If we haven't reached the end, generate the next question
-                if len(st.session_state.chat_history) < 7:  # Less than 4 questions asked
-                    # Generate next question
-                    next_question = backend.stream_next_cv_question(
-                        st.session_state.client,
-                        st.session_state.model,
-                        st.session_state.cv_text,
-                        st.session_state.chat_history
-                    )
-                    
-                    # Add to chat history
-                    st.session_state.chat_history.append({"role": "interviewer", "content": next_question})
-                    
-                    # Synthesize and play the next question
-                    audio_bytes, audio_stream = synthesize_and_play(next_question)
-                    if audio_stream:
-                        backend.play_audio(audio_stream)
-                else:
-                    # End the interview
-                    conclusion = "Thank you for participating in this interview. I'll now generate an evaluation report based on our conversation."
-                    st.session_state.chat_history.append({"role": "interviewer", "content": conclusion})
-                    audio_bytes, audio_stream = synthesize_and_play(conclusion)
-                    if audio_stream:
-                        backend.play_audio(audio_stream)
-                    st.session_state.interview_completed = True
-                
-                st.rerun()
+                    st.rerun()  # Rerun to update the UI with the user's response
         else:
             # End the interview and generate evaluation
             st.session_state.interview_completed = True
