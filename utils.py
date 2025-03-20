@@ -2,6 +2,14 @@ from PyPDF2 import PdfReader
 import re
 import speech_recognition as sr
 from io import StringIO
+import os
+import tempfile
+import requests
+from pydub import AudioSegment
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 def clean_text(text: str) -> str:
     """
@@ -69,6 +77,31 @@ def collect_user_speech(timeout: int = 10, phrase_timeout: int = 5):
         except sr.RequestError as e:
             print(f"Speech recognition service error: {e}")
             return ""
+
+def text_to_speech(text, speaker_id="p225"):
+    """
+    Convert text to speech using the TTS server.
+    """
+    # Get TTS server URL from environment variable, default to localhost if not set
+    tts_server_url = os.getenv("TTS_SERVER_URL", "http://localhost:5002")
+    url = f"{tts_server_url}/api/tts"
+    
+    data = {
+        "text": text,
+        "speaker_id": speaker_id
+    }
+    
+    response = requests.post(url, data=data)
+    
+    if response.status_code == 200:
+        # Create a temporary file to store the audio
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as temp_file:
+            temp_file.write(response.content)
+            temp_path = temp_file.name
+        
+        return temp_path
+    else:
+        raise Exception(f"TTS request failed with status {response.status_code}: {response.text}")
 
 def chunk_text_fixed_size(text, chunk_size=256):
     """Splits text into fixed-size chunks using StringIO"""

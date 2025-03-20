@@ -14,6 +14,7 @@ load_dotenv()
 API_KEY = os.getenv("API_KEY")
 BASE_URL = os.getenv("BASE_URL")
 MODEL_NAME = os.getenv("MODEL_NAME")
+TTS_SERVER_URL = os.getenv("TTS_SERVER_URL", "http://localhost:5002")
 
 def synthesize_text_to_audio(message, speaker_id="p230", style_wav="", language_id=""):
     """
@@ -28,7 +29,7 @@ def synthesize_text_to_audio(message, speaker_id="p230", style_wav="", language_
     Returns:
         BytesIO: In-memory stream containing the WAV audio data.
     """
-    url = "http://localhost:5002/api/tts"
+    url = f"{TTS_SERVER_URL}/api/tts"
     data = {
         "text": message,
         "speaker_id": speaker_id,
@@ -427,22 +428,4 @@ def technical_interview():
         print(f"Error during technical interview: {e}")
         return None, str(e)
 
-if __name__ == "__main__":
-    try:
-        print("=== AI Mock Interview System ===")
-        print("1. CV-based Interview")
-        print("2. Technical Interview")
-        choice = input("Select interview type (1 or 2): ")
-        
-        if choice == "1":
-            print("\nStarting CV-based interview...\n")
-            cv_interview()
-        elif choice == "2":
-            print("\nStarting technical interview...\n")
-            chat_history, evaluation_report = technical_interview()
-        else:
-            print("Invalid choice. Please enter 1 or 2.")
-    except KeyboardInterrupt:
-        print("\nInterview terminated by user.")
-    except Exception as e:
-        print(f"\nAn error occurred: {e}")
+
