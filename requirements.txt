@@ -1,8 +1,0 @@
-streamlit
-openai
-python-dotenv
-requests
-pydub
-PyPDF2
-pyaudio
-SpeechRecognition

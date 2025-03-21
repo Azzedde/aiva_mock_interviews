@@ -306,6 +306,11 @@ def generate_evaluation_report(client, model, interview_data):
     3. Areas for improvement
     4. Detailed feedback on each question, comparing the expected answer with what the candidate provided
     5. Concrete recommendations for the candidate to improve their knowledge and interview performance
+    6. Be a little bit harsh and in the same time encouraging
+    7. Talk directly to the candidate
+    8. Use "you" and "your" to address the candidate
+    9. Be professional and respectful
+    10. Provide constructive and realistic feedback
     
     Interview Data:
     """

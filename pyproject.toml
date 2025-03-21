@@ -1,0 +1,16 @@
+[project]
+name = "aiva-mock-interviews"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "streamlit",
+        "openai",
+        "python-dotenv",
+        "requests",
+        "pydub",
+        "PyPDF2",
+        "pyaudio",
+        "SpeechRecognition",
+]

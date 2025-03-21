@@ -1,15 +1,11 @@
 import streamlit as st
-import backend
+import src.backend as backend
 import os
 import json
-import time
-from io import BytesIO
 import base64
 from openai import OpenAI
 import utils
 import tempfile
-import shutil
-import pandas as pd
 from dotenv import load_dotenv
 import httpx
 from openai import OpenAI
@@ -204,6 +200,49 @@ def reset_interview():
     st.session_state.audio_bytes = None
     st.session_state.user_intro = ""
 
+def generate_final_report():
+    """
+    Generate the final evaluation report based on the interview type.
+    """
+    if st.session_state.interview_type == "cv":
+        # Prepare data for a CV-based interview.
+        interview_data = []
+        for i in range(1, len(st.session_state.chat_history), 2):
+            if i + 1 < len(st.session_state.chat_history):
+                question = st.session_state.chat_history[i]["content"]
+                answer = st.session_state.chat_history[i + 1]["content"]
+                interview_data.append({
+                    "question_data": {"question": question, "answer": ""},
+                    "candidate_answer": answer
+                })
+        evaluation_report = backend.generate_evaluation_report(
+            st.session_state.client,
+            st.session_state.model,
+            interview_data
+        )
+    else:
+        # Prepare data for a technical interview.
+        evaluation_data = []
+        question_index = 0
+        for i in range(3, len(st.session_state.chat_history) - 1, 2):
+            if i < len(st.session_state.chat_history) and question_index < len(st.session_state.interview_data):
+                question = st.session_state.chat_history[i]["content"]
+                answer = (st.session_state.chat_history[i + 1]["content"]
+                          if i + 1 < len(st.session_state.chat_history) else "")
+                evaluation_data.append({
+                    "question_data": st.session_state.interview_data[question_index],
+                    "reformulated_question": question,
+                    "candidate_answer": answer
+                })
+                question_index += 1
+        evaluation_report = backend.generate_evaluation_report(
+            st.session_state.client,
+            st.session_state.model,
+            evaluation_data
+        )
+    st.session_state.evaluation_report = evaluation_report
+    st.session_state.interview_completed = True
+
 # Main app header
 st.markdown('<div class="interview-header"><h1>🎙️ AI Mock Interview System</h1></div>', unsafe_allow_html=True)
 
@@ -326,10 +365,16 @@ with st.sidebar:
                 st.session_state.current_question_index / 5, 1.0
             ))
         
-        # End interview button
+            # End interview button
         if st.button("End Interview", type="secondary"):
-            st.session_state.interview_completed = True
-            st.rerun()
+            # Immediately notify the user that report generation is in progress.
+            st.info("Your report is being generated...")
+            # Generate the evaluation report immediately.
+            try:
+                generate_final_report()
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error generating evaluation report: {e}")
         
         # Reset interview button
         if st.button("Reset Interview", type="secondary"):
@@ -387,15 +432,17 @@ elif st.session_state.interview_completed:
     # Display evaluation report
     if st.session_state.evaluation_report:
         st.markdown('<h3>Evaluation Report</h3>', unsafe_allow_html=True)
-        st.markdown(f'<div class="evaluation-report">{st.session_state.evaluation_report.replace(chr(10), "<br>")}</div>', unsafe_allow_html=True)
+        # Create a container with the evaluation-report class for styling
+        with st.container():
+            # Display the evaluation report as markdown (without unsafe_allow_html)
+            st.markdown(st.session_state.evaluation_report, unsafe_allow_html=True)
         
-        # Option to download the report
-        report_text = st.session_state.evaluation_report
+        # Option to download the report directly from session state
         st.download_button(
             label="Download Evaluation Report",
-            data=report_text,
-            file_name="interview_evaluation.txt",
-            mime="text/plain"
+            data=st.session_state.evaluation_report,
+            file_name="interview_evaluation.md",
+            mime="text/markdown"
         )
     
     # Option to start a new interview
@@ -561,9 +608,8 @@ else:
                 
                 st.session_state.evaluation_report = evaluation_report
                 
-                # Save the report to a file
-                with open("interview_evaluation.txt", "w") as f:
-                    f.write(evaluation_report)
+                # Display the report directly using st.markdown in the completed interview view
+                # No need to save to a file anymore
             except Exception as e:
                 st.error(f"Error generating evaluation report: {e}")
             
@@ -753,9 +799,8 @@ else:
                     
                     st.session_state.evaluation_report = evaluation_report
                     
-                    # Save the report to a file
-                    with open("interview_evaluation.txt", "w") as f:
-                        f.write(evaluation_report)
+                    # Display the report directly using st.markdown in the completed interview view
+                    # No need to save to a file anymore
                     
                     st.session_state.interview_completed = True
                     st.rerun()
