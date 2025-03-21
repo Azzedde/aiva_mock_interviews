@@ -79,7 +79,6 @@ The application follows this workflow for both CV-based and technical interviews
 │                 │     │                 │     │                 │
 └─────────────────┘     └─────────────────┘     └─────────────────┘
 ```
-![Screenshot from 2025-03-21 21-53-11](https://github.com/user-attachments/assets/6d26c55d-1f86-4300-8bd0-40b5dd8f0847)
 ![Screenshot from 2025-03-21 21-53-04](https://github.com/user-attachments/assets/a5e7d1aa-2f21-4674-8fa4-ec38b3839a66)
 
 For technical interviews, users can select from our extensive database of pre-built questions covering various AI and machine learning topics, with different difficulty levels from easy to hard.
