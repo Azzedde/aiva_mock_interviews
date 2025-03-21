@@ -6,9 +6,31 @@ This application provides mock interviews with AI-generated questions and evalua
 
 AIVA (AI Virtual Assistant) Mock Interviews is a comprehensive interview preparation platform that simulates real interview scenarios using AI technology. The system conducts interactive interviews, asks relevant questions based on your CV or technical knowledge, listens to your responses, and provides detailed feedback on your performance.
 
-## Technical Architecture
+Users can choose between two interview types:
+1. **CV-based interviews** - Upload your CV and get personalized questions based on your experience and background
+2. **Technical interviews** - Practice with questions from our extensive pre-built database covering AI, machine learning, and related topics
+
+## System Architecture
 
 The application consists of several key components:
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│                 │     │                 │     │                 │
+│  Web Interface  │◄───►│  Backend Logic  │◄───►│   LLM Service   │
+│   (Streamlit)   │     │    (Python)     │     │ (Ollama/OpenAI) │
+│                 │     │                 │     │                 │
+└────────┬────────┘     └────────┬────────┘     └─────────────────┘
+         │                       │
+         │                       │
+         ▼                       ▼
+┌─────────────────┐     ┌─────────────────┐
+│                 │     │                 │
+│  Speech Input   │     │  Text-to-Speech │
+│  (Microphone)   │     │   (Coqui TTS)   │
+│                 │     │                 │
+└─────────────────┘     └─────────────────┘
+```
 
 - **Frontend**: Built with Streamlit for an interactive web interface
 - **Backend**: Python-based logic for interview management and AI interactions
@@ -35,6 +57,29 @@ The application consists of several key components:
   - Clean, intuitive web interface
   - Real-time interview progress tracking
   - Audio playback controls
+
+## Interview Workflow
+
+The application follows this workflow for both CV-based and technical interviews:
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│                 │     │                 │     │                 │
+│  Select         │────►│  Upload CV      │────►│  Start          │
+│  Interview Type │     │  (if CV-based)  │     │  Interview      │
+│                 │     │                 │     │                 │
+└─────────────────┘     └─────────────────┘     └────────┬────────┘
+                                                         │
+                                                         ▼
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│                 │     │                 │     │                 │
+│  Receive        │◄────│  Answer         │◄────│  Listen to      │
+│  Evaluation     │     │  Questions      │     │  Questions      │
+│                 │     │                 │     │                 │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+```
+
+For technical interviews, users can select from our extensive database of pre-built questions covering various AI and machine learning topics, with different difficulty levels from easy to hard.
 
 ## Deployment Options
 
