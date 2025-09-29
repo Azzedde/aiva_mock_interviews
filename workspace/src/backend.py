@@ -3,7 +3,7 @@ from io import BytesIO
 import wave
 from dotenv import load_dotenv
 import os
-import utils
+import workspace.src.utils as utils
 from openai import OpenAI
 import pyaudio
 import speech_recognition as sr

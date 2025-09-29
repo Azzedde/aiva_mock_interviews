@@ -1,10 +1,10 @@
 import streamlit as st
-import src.backend as backend
+import workspace.src.backend as backend
 import os
 import json
 import base64
 from openai import OpenAI
-import utils
+import workspace.src.utils as utils
 import tempfile
 from dotenv import load_dotenv
 import httpx
