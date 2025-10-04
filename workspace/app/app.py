@@ -1,10 +1,10 @@
 import streamlit as st
-import workspace.src.backend as backend
+from aiva_mock_interviews import backend
+from aiva_mock_interviews import utils
 import os
 import json
 import base64
 from openai import OpenAI
-import workspace.src.utils as utils
 import tempfile
 from dotenv import load_dotenv
 import httpx

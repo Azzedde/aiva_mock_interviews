@@ -3,7 +3,7 @@ from io import BytesIO
 import wave
 from dotenv import load_dotenv
 import os
-import workspace.src.utils as utils
+from aiva_mock_interviews import utils
 from openai import OpenAI
 import pyaudio
 import speech_recognition as sr
@@ -336,7 +336,7 @@ def technical_interview():
         chat_history = []
         interview_data = []  # To store questions and answers for final evaluation
 
-        with open("interview_questions.json") as f:
+        with open("../data/interview_questions.json") as f:
             data = json.load(f)
 
         intro = """Hello dear candidate, I am Josh, your virtual voice assistant for this technical interview for an AI role.
