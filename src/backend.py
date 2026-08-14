@@ -167,6 +167,27 @@ def record_and_transcribe():
             return ""
 
 
+def summarize_chat_history(client, model, chat_history, threshold=20):
+    if len(chat_history) <= threshold:
+        return str(chat_history)
+
+    messages_to_summarize = chat_history[:-threshold]
+    recent_messages = chat_history[-threshold:]
+
+    history_text = "\n".join([f"{m['role']}: {m['content']}" for m in messages_to_summarize])
+    prompt = f"""Please summarize the following conversation history concisely, preserving key details, topics discussed, and the candidate's responses. Do not add any extra text or commentary.
+{history_text}"""
+
+    response = client.chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    summary = response.choices[0].message.content
+
+    summarized_list = [{"role": "system", "content": f"Previous conversation summary: {summary}"}] + recent_messages
+    return str(summarized_list)
+
+
 def stream_next_cv_question(client, model, cv, chat_history):
     user_prompt = """You are professional talent acquisition specialist conducting an interview for an AI role.
     Your taks is to continue the conversation with the candidate after he answered the previous question.
@@ -186,7 +207,7 @@ def stream_next_cv_question(client, model, cv, chat_history):
     CV: {cv}
 
     Conversation Continuity: """
-    chat_history = str(chat_history)
+    chat_history = summarize_chat_history(client, model, chat_history)
     formatted_user_prompt = user_prompt.format(cv=cv, chat_history=chat_history)
 
     response = client.chat.completions.create(
